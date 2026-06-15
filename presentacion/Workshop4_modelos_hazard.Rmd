@@ -2,7 +2,7 @@
 title: "Modelos Hazard"
 subtitle: "Confiabilidad operacional y tiempo hasta falla en estaciones autónomas de monitoreo volcánico"
 author: "Alex Alarcón R."
-date: "16 de Junio de 2026"
+date: "16 de junio de 2026"
 output:
   html_document:
     toc: true
