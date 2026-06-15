@@ -196,6 +196,38 @@ model_metrics <- tibble(
     sum(hazard_data$event == 1)
   )
 )
+
+fmt_num <- function(x, digits = 2) {
+  formatC(
+    x,
+    format = "f",
+    digits = digits,
+    decimal.mark = ",",
+    big.mark = "."
+  )
+}
+
+fmt_int <- function(x) {
+  formatC(
+    x,
+    format = "d",
+    big.mark = "."
+  )
+}
+
+fmt_pct <- function(x, digits = 1) {
+  paste0(
+    formatC(
+      100 * x,
+      format = "f",
+      digits = digits,
+      decimal.mark = ",",
+      big.mark = "."
+    ),
+    " %"
+  )
+}
+
 ```
 
 <style>
@@ -427,7 +459,7 @@ Este supuesto se evalúa mediante residuos de Schoenfeld y una prueba global de 
 
 Se utilizó una base de datos sintética y reproducible de estaciones autónomas asociadas a volcanes monitoreados en Chile. La base fue construida para demostrar el flujo metodológico y no corresponde a registros reales institucionales de operación, fallas o mantenimiento.
 
-```{r resumen-base}
+```{r base-datos-utilizada, echo=FALSE}
 data_overview <- tibble(
   Indicador = c(
     "Estaciones sintéticas",
@@ -440,18 +472,18 @@ data_overview <- tibble(
     "Tiempo máximo observado"
   ),
   Valor = c(
-    nrow(hazard_data),
-    n_distinct(hazard_data$volcano_name),
-    sum(hazard_data$event == 1),
-    sum(hazard_data$event == 0),
-    round(mean(hazard_data$event == 1), 3),
-    min(hazard_data$time_days),
-    median(hazard_data$time_days),
-    max(hazard_data$time_days)
+    fmt_int(nrow(hazard_data)),
+    fmt_int(n_distinct(hazard_data$volcano_name)),
+    fmt_int(sum(hazard_data$event == 1)),
+    fmt_int(sum(hazard_data$event == 0)),
+    fmt_pct(mean(hazard_data$event == 1), 1),
+    paste(fmt_int(min(hazard_data$time_days)), "días"),
+    paste(fmt_int(median(hazard_data$time_days)), "días"),
+    paste(fmt_int(max(hazard_data$time_days)), "días")
   )
 )
 
-kable(data_overview, align = c("l", "c"))
+kable(data_overview, align = c("l", "r"))
 ```
 
 <div class="warning">
@@ -484,7 +516,7 @@ Base de datos RAW:
 
 ## Variables principales
 
-```{r variables}
+```{r variables-principales, echo=FALSE}
 variables_tbl <- tibble::tribble(
   ~Variable, ~Descripción, ~Rol,
   "station_id", "Identificador sintético de estación", "Identificación",
@@ -493,8 +525,8 @@ variables_tbl <- tibble::tribble(
   "event", "1 = falla; 0 = censura", "Evento",
   "energy_system", "Robusto, estándar o limitado", "Covariable",
   "snow_ice_exposure", "Baja, media, alta o muy alta", "Covariable",
-  "age_years", "Antigüedad simulada del sistema", "Covariable",
-  "battery_margin_days", "Margen energético simulado", "Covariable",
+  "age_years", "Antigüedad simulada del sistema, en años", "Covariable",
+  "battery_margin_days", "Margen energético simulado, en días", "Covariable",
   "winter_operation", "Operación durante invierno crítico", "Covariable"
 )
 
@@ -530,28 +562,38 @@ surv_obj <- Surv(time = hazard_data$time_days, event = hazard_data$event)
 
 ## Exploración inicial
 
-```{r exploracion-eventos}
+La exploración inicial permite revisar cuántas estaciones fallaron o quedaron censuradas según las covariables principales.
+
+```{r exploracion-energia, echo=FALSE}
 events_energy <- hazard_data %>%
   count(energy_system, event) %>%
   group_by(energy_system) %>%
-  mutate(Proporción = round(n / sum(n), 3)) %>%
+  mutate(Porcentaje = fmt_pct(n / sum(n), 1)) %>%
   ungroup() %>%
   mutate(event = recode(as.character(event), "0" = "Censura", "1" = "Falla")) %>%
-  rename(`Sistema energético` = energy_system, Estado = event, n = n)
+  rename(
+    `Sistema energético` = energy_system,
+    Estado = event,
+    `Número de estaciones` = n
+  )
 
-kable(events_energy, align = c("l", "l", "c", "c"))
+kable(events_energy, align = c("l", "l", "r", "r"))
 ```
 
-```{r exploracion-nieve}
+```{r exploracion-nieve, echo=FALSE}
 events_snow <- hazard_data %>%
   count(snow_ice_exposure, event) %>%
   group_by(snow_ice_exposure) %>%
-  mutate(Proporción = round(n / sum(n), 3)) %>%
+  mutate(Porcentaje = fmt_pct(n / sum(n), 1)) %>%
   ungroup() %>%
   mutate(event = recode(as.character(event), "0" = "Censura", "1" = "Falla")) %>%
-  rename(`Exposición nieve/hielo` = snow_ice_exposure, Estado = event, n = n)
+  rename(
+    `Exposición nieve/hielo` = snow_ice_exposure,
+    Estado = event,
+    `Número de estaciones` = n
+  )
 
-kable(events_snow, align = c("l", "l", "c", "c"))
+kable(events_snow, align = c("l", "l", "r", "r"))
 ```
 
 ## Kaplan-Meier global
@@ -592,14 +634,17 @@ ggsurvplot(
 )
 ```
 
-```{r logrank-energia}
+```{r logrank-energia-tabla, echo=FALSE}
 logrank_results %>%
   filter(comparacion == "Sistema energético") %>%
-  mutate(
-    chisq = round(chisq, 3),
-    p_value = round(p_value, 4)
+  transmute(
+    Comparación = comparacion,
+    `Chi-cuadrado` = fmt_num(chisq, 3),
+    gl = fmt_int(gl),
+    `Valor p` = fmt_num(p_value, 4),
+    Interpretación = interpretacion
   ) %>%
-  kable(align = c("l", "c", "c", "c", "l"))
+  kable(align = c("l", "r", "r", "r", "l"))
 ```
 
 <div class="key">
@@ -626,14 +671,17 @@ ggsurvplot(
 )
 ```
 
-```{r logrank-nieve}
+```{r logrank-nieve-tabla, echo=FALSE}
 logrank_results %>%
   filter(comparacion == "Exposición nieve/hielo") %>%
-  mutate(
-    chisq = round(chisq, 3),
-    p_value = round(p_value, 4)
+  transmute(
+    Comparación = comparacion,
+    `Chi-cuadrado` = fmt_num(chisq, 3),
+    gl = fmt_int(gl),
+    `Valor p` = fmt_num(p_value, 4),
+    Interpretación = interpretacion
   ) %>%
-  kable(align = c("l", "c", "c", "c", "l"))
+  kable(align = c("l", "r", "r", "r", "l"))
 ```
 
 <div class="warning">
@@ -660,8 +708,16 @@ El modelo Cox estima el efecto ajustado de cada variable sobre el Hazard de fall
 
 ## Hazard Ratios estimados
 
-```{r tabla-cox}
-kable(cox_table, align = c("l", "c", "c", "c"))
+```{r hazard-ratios-tabla, echo=FALSE}
+cox_table_fmt <- cox_table %>%
+  transmute(
+    Variable,
+    HR = fmt_num(HR, 2),
+    `IC 95 %` = stringr::str_replace_all(`IC95%`, "\\.", ","),
+    `Valor p` = fmt_num(`p-value`, 4)
+  )
+
+kable(cox_table_fmt, align = c("l", "r", "c", "r"))
 ```
 
 La antigüedad del sistema es el predictor ajustado más robusto. En esta base sintética, cada año adicional de antigüedad incrementa el Hazard de falla en aproximadamente 24,5%, manteniendo constantes las demás variables del modelo.
@@ -684,7 +740,7 @@ ggplot(forest_data, aes(x = HR, y = Variable)) +
   ) +
   scale_x_log10(
     breaks = c(0.3, 0.5, 1, 2, 3, 5, 10, 30),
-    labels = c("0.3", "0.5", "1", "2", "3", "5", "10", "30")
+    labels = c("0,3", "0,5", "1", "2", "3", "5", "10", "30")
   ) +
   coord_cartesian(xlim = c(0.25, 30)) +
   labs(
@@ -698,16 +754,41 @@ ggplot(forest_data, aes(x = HR, y = Variable)) +
 
 ## Métricas del modelo
 
-```{r metricas}
-kable(model_metrics, align = c("l", "c"))
+```{r metricas-modelo-tabla, echo=FALSE}
+model_metrics_fmt <- model_metrics %>%
+  mutate(
+    Valor = case_when(
+      Métrica %in% c("Número de observaciones", "Número de eventos") ~ fmt_int(as.integer(Valor)),
+      Métrica == "Likelihood Ratio Test p-value" ~ fmt_num(as.numeric(Valor), 5),
+      TRUE ~ fmt_num(as.numeric(Valor), 3)
+    )
+  )
+
+kable(model_metrics_fmt, align = c("l", "r"))
 ```
 
 El modelo completo es estadísticamente relevante según el Likelihood Ratio Test. El C-index cercano a 0,71 indica capacidad discriminativa moderada-alta para distinguir estaciones con mayor y menor riesgo relativo de falla.
 
 ## Validación del supuesto de riesgos proporcionales
 
-```{r ph-test}
-kable(ph_table, align = c("l", "c", "c", "c", "l"))
+```{r ph-tabla, echo=FALSE}
+ph_table_fmt <- ph_table %>%
+  mutate(
+    Variable = recode(
+      Variable,
+      "energy_system" = "Sistema energético",
+      "snow_ice_exposure" = "Exposición nieve/hielo",
+      "age_years" = "Antigüedad del sistema",
+      "battery_margin_days" = "Margen de batería",
+      "winter_operation" = "Operación en invierno crítico",
+      "GLOBAL" = "Global"
+    ),
+    `Chi-cuadrado` = fmt_num(`Chi-cuadrado`, 3),
+    gl = fmt_int(as.integer(gl)),
+    `p-value` = fmt_num(`p-value`, 4)
+  )
+
+kable(ph_table_fmt, align = c("l", "r", "r", "r", "l"))
 ```
 
 <div class="key">
@@ -785,9 +866,14 @@ Workshop 4/
 ├── scripts/
 │   └── 02_analisis_hazard.R
 ├── presentacion/
-│   └── Workshop4_modelos_hazard.Rmd
+│   ├── Workshop4_modelos_hazard.Rmd
+│   ├── Workshop4_modelos_hazard.html
+│   └── qr_github.png
 ├── outputs/
 │   ├── figures/
 │   └── tables/
-└── README.md
+├── docs/
+│   └── index.html
+├── README.md
+└── Workshop 4.Rproj
 ```
