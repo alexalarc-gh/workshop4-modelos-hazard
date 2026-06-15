@@ -1,0 +1,4 @@
+metrica,valor,lectura
+AIC,483.422,Criterio de información para comparar modelos
+Concordance index C,0.71,Capacidad discriminante moderada-alta
+Likelihood ratio test p-value,1.8e-4,El modelo global es estadísticamente relevante

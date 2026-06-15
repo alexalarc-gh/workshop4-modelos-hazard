@@ -1,0 +1,9 @@
+variable,hazard_ratio,std.error,statistic,p_value,ic95_inf,ic95_sup,interpretacion
+energy_systemEstándar,1.234,0.6646512756738558,0.3158421943811702,0.75212,0.335,4.539,Aumenta el hazard relativo
+energy_systemLimitado,1.051,0.9252107386185479,0.05377270794173578,0.95712,0.171,6.444,Aumenta el hazard relativo
+snow_ice_exposureMedia,1.141,1.09015476233327,0.12121742782344197,0.90352,0.135,9.668,Aumenta el hazard relativo
+snow_ice_exposureAlta,1.742,1.0704009397537175,0.5184293936151502,0.60416,0.214,14.195,Aumenta el hazard relativo
+snow_ice_exposureMuy alta,2.92,1.1121847371088869,0.9635699308207591,0.33526,0.33,25.829,Aumenta el hazard relativo
+age_years,1.245,0.08043402524529368,2.7194454537345636,0.00654,1.063,1.457,Aumenta el hazard relativo
+battery_margin_days,0.845,0.12910819599789478,-1.306802478169324,0.19128,0.656,1.088,Reduce el hazard relativo
+winter_operationSí,0.587,0.32628138787430894,-1.6313960390472686,0.10281,0.31,1.113,Reduce el hazard relativo

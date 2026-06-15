@@ -1,0 +1,9 @@
+variable,HR,IC95,p_value,lectura
+Antigüedad del sistema,1.25,[1.06; 1.46],0.0065,Aumenta significativamente el hazard
+Operación en invierno crítico,0.59,[0.31; 1.11],0.1028,"Tendencia protectora, no significativa"
+Margen de batería,0.84,[0.66; 1.09],0.1913,"Tendencia protectora, no significativa"
+Nieve/hielo: muy alta vs baja,2.92,[0.33; 25.83],0.3353,"Tendencia a mayor hazard, no significativa"
+Nieve/hielo: alta vs baja,1.74,[0.21; 14.2],0.6042,"Tendencia a mayor hazard, no significativa"
+Energía: estándar vs robusto,1.23,[0.34; 4.54],0.7521,"Tendencia a mayor hazard, no significativa"
+Nieve/hielo: media vs baja,1.14,[0.14; 9.67],0.9035,"Tendencia a mayor hazard, no significativa"
+Energía: limitado vs robusto,1.05,[0.17; 6.44],0.9571,"Tendencia a mayor hazard, no significativa"

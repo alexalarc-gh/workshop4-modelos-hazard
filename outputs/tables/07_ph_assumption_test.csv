@@ -1,0 +1,7 @@
+variable,chisq,df,p,interpretacion
+energy_system,2.29484,2,0.31745,Sin evidencia de violación PH
+snow_ice_exposure,3.06163,3,0.38222,Sin evidencia de violación PH
+age_years,1.18465,1,0.27641,Sin evidencia de violación PH
+battery_margin_days,0.85735,1,0.35448,Sin evidencia de violación PH
+winter_operation,1.9442,1,0.16321,Sin evidencia de violación PH
+GLOBAL,13.06422,8,0.10966,Sin evidencia de violación PH

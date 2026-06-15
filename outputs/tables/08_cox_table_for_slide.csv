@@ -1,0 +1,9 @@
+variable,hr_ic95,p_value
+Energía: estándar vs robusto,1.234 [0.335; 4.539],0.75212
+Energía: limitado vs robusto,1.051 [0.171; 6.444],0.95712
+Nieve/hielo: media vs baja,1.141 [0.135; 9.668],0.90352
+Nieve/hielo: alta vs baja,1.742 [0.214; 14.195],0.60416
+Nieve/hielo: muy alta vs baja,2.92 [0.33; 25.829],0.33526
+Antigüedad del sistema,1.245 [1.063; 1.457],0.00654
+Margen de batería,0.845 [0.656; 1.088],0.19128
+Operación en invierno crítico,0.587 [0.31; 1.113],0.10281

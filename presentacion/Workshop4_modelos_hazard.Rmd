@@ -1,0 +1,760 @@
+---
+title: "Modelos Hazard"
+subtitle: "Confiabilidad operacional y tiempo hasta falla en estaciones autónomas de monitoreo volcánico"
+author: "Alex Alarcón R."
+date: "16 de Junio de 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: hide
+    theme: flatly
+    highlight: tango
+    df_print: paged
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5,
+  out.width = "95%"
+)
+
+library(tidyverse)
+library(readr)
+library(knitr)
+library(survival)
+library(survminer)
+library(broom)
+
+input_dir <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+
+project_dir <- if (basename(input_dir) %in% c("presentacion", "presentation")) {
+  normalizePath(file.path(input_dir, ".."), winslash = "/", mustWork = TRUE)
+} else {
+  input_dir
+}
+
+p <- function(...) file.path(project_dir, ...)
+
+github_repo_url <- "REEMPLAZAR_CON_LINK_GITHUB"
+github_data_raw_url <- "REEMPLAZAR_CON_LINK_RAW_CSV"
+
+data_file <- p("data", "synthetic_hazard_stations_chile.csv")
+
+if (file.exists(data_file)) {
+  hazard_data_raw <- read_csv(data_file, show_col_types = FALSE)
+} else if (!grepl("^REEMPLAZAR", github_data_raw_url)) {
+  hazard_data_raw <- read_csv(github_data_raw_url, show_col_types = FALSE)
+} else {
+  stop("No se encontró la base de datos local y no se ha definido el enlace RAW de GitHub.")
+}
+
+hazard_data <- hazard_data_raw %>%
+  mutate(
+    event = as.integer(event),
+    time_days = as.numeric(time_days),
+    winter_operation = as.integer(winter_operation),
+    energy_system = factor(
+      energy_system,
+      levels = c("robust", "standard", "limited"),
+      labels = c("Robusto", "Estándar", "Limitado")
+    ),
+    snow_ice_exposure = factor(
+      snow_ice_exposure,
+      levels = c("low", "medium", "high", "very_high"),
+      labels = c("Baja", "Media", "Alta", "Muy alta")
+    ),
+    comm_type = factor(
+      comm_type,
+      levels = c("satellite", "radio", "cellular"),
+      labels = c("Satelital", "Radio", "Celular")
+    ),
+    access_difficulty = factor(
+      access_difficulty,
+      levels = c("low", "medium", "high"),
+      labels = c("Baja", "Media", "Alta")
+    ),
+    maintenance_history = factor(
+      maintenance_history,
+      levels = c("preventive_ok", "preventive_delayed", "corrective_only"),
+      labels = c("Preventiva vigente", "Preventiva retrasada", "Solo correctiva")
+    ),
+    winter_operation = factor(
+      winter_operation,
+      levels = c(0, 1),
+      labels = c("No", "Sí")
+    )
+  )
+
+surv_obj <- Surv(time = hazard_data$time_days, event = hazard_data$event)
+
+km_global <- survfit(surv_obj ~ 1, data = hazard_data)
+km_energy <- survfit(surv_obj ~ energy_system, data = hazard_data)
+km_snow <- survfit(surv_obj ~ snow_ice_exposure, data = hazard_data)
+
+logrank_energy <- survdiff(surv_obj ~ energy_system, data = hazard_data)
+logrank_snow <- survdiff(surv_obj ~ snow_ice_exposure, data = hazard_data)
+
+logrank_results <- tibble(
+  comparacion = c("Sistema energético", "Exposición nieve/hielo"),
+  chisq = c(logrank_energy$chisq, logrank_snow$chisq),
+  gl = c(length(logrank_energy$n) - 1, length(logrank_snow$n) - 1),
+  p_value = c(
+    1 - pchisq(logrank_energy$chisq, length(logrank_energy$n) - 1),
+    1 - pchisq(logrank_snow$chisq, length(logrank_snow$n) - 1)
+  )
+) %>%
+  mutate(
+    interpretacion = if_else(
+      p_value < 0.05,
+      "Diferencias estadísticamente relevantes",
+      "Sin evidencia suficiente al 5%"
+    )
+  )
+
+cox_model <- coxph(
+  Surv(time_days, event) ~
+    energy_system +
+    snow_ice_exposure +
+    age_years +
+    battery_margin_days +
+    winter_operation,
+  data = hazard_data,
+  x = TRUE,
+  y = TRUE
+)
+
+cox_summary <- summary(cox_model)
+
+cox_hr <- tidy(cox_model, exponentiate = TRUE, conf.int = TRUE) %>%
+  mutate(
+    variable = recode(
+      term,
+      "energy_systemEstándar" = "Energía: estándar vs robusto",
+      "energy_systemLimitado" = "Energía: limitado vs robusto",
+      "snow_ice_exposureMedia" = "Nieve/hielo: media vs baja",
+      "snow_ice_exposureAlta" = "Nieve/hielo: alta vs baja",
+      "snow_ice_exposureMuy alta" = "Nieve/hielo: muy alta vs baja",
+      "age_years" = "Antigüedad del sistema",
+      "battery_margin_days" = "Margen de batería",
+      "winter_operationSí" = "Operación en invierno crítico"
+    ),
+    HR = estimate,
+    IC95 = paste0("[", round(conf.low, 2), "; ", round(conf.high, 2), "]"),
+    p_value = p.value
+  )
+
+cox_table <- cox_hr %>%
+  transmute(
+    Variable = variable,
+    HR = round(HR, 2),
+    `IC95%` = IC95,
+    `p-value` = round(p_value, 4)
+  ) %>%
+  arrange(`p-value`)
+
+ph_test <- cox.zph(cox_model)
+
+ph_table <- as.data.frame(ph_test$table) %>%
+  rownames_to_column("Variable") %>%
+  as_tibble() %>%
+  transmute(
+    Variable,
+    `Chi-cuadrado` = round(chisq, 3),
+    gl = df,
+    `p-value` = round(p, 4),
+    Interpretación = if_else(
+      p < 0.05,
+      "Posible violación del supuesto PH",
+      "Sin evidencia de violación PH"
+    )
+  )
+
+model_metrics <- tibble(
+  Métrica = c(
+    "AIC",
+    "Concordance index C",
+    "Error estándar del C-index",
+    "Likelihood Ratio Test p-value",
+    "Número de observaciones",
+    "Número de eventos"
+  ),
+  Valor = c(
+    round(AIC(cox_model), 3),
+    round(as.numeric(cox_summary$concordance[1]), 3),
+    round(as.numeric(cox_summary$concordance[2]), 3),
+    round(as.numeric(cox_summary$logtest["pvalue"]), 5),
+    nrow(hazard_data),
+    sum(hazard_data$event == 1)
+  )
+)
+```
+
+<style>
+body {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.main-container {
+  max-width: 1200px !important;
+}
+
+h1, h2, h3 {
+  font-weight: 700;
+}
+
+.note {
+  border-left: 5px solid #2c7fb8;
+  background: #eef6fb;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 4px;
+}
+
+.warning {
+  border-left: 5px solid #f28e2b;
+  background: #fff7ed;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 4px;
+}
+
+.key {
+  border-left: 5px solid #1b9e77;
+  background: #ecfdf5;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 4px;
+}
+
+.caption {
+  color: #64748b;
+  font-size: 0.9em;
+  text-align: center;
+}
+
+table {
+  font-size: 0.95em;
+}
+
+pre {
+  font-size: 0.88em;
+}
+</style>
+
+# Introducción / Motivación
+
+Los modelos Hazard, también conocidos como modelos de supervivencia o análisis de tiempo hasta evento, permiten estudiar **cuánto tiempo transcurre hasta que ocurre un evento relevante**. En ingeniería, estos modelos son especialmente útiles cuando el evento corresponde a una falla, una detención operacional, una pérdida de comunicación, una indisponibilidad prolongada o una intervención correctiva.
+
+En este trabajo se aplica el enfoque a un caso de confiabilidad operacional: **estaciones autónomas de monitoreo volcánico en Chile**. La pregunta central no es únicamente si una estación falla, sino **cuándo falla y bajo qué condiciones aumenta o disminuye su riesgo de falla**.
+
+<div class="key">
+Pregunta guía: ¿cómo cambia el riesgo operacional de una estación autónoma en función de su sistema energético, exposición a nieve/hielo, antigüedad, margen de batería y operación invernal?
+</div>
+
+## Problema de ingeniería
+
+Las estaciones autónomas de monitoreo funcionan en ambientes remotos y expuestos. Su operación puede verse afectada por condiciones meteorológicas, restricciones de acceso, degradación de componentes, pérdida de margen energético y eventos de mantenimiento no oportunos.
+
+En ese contexto, la confiabilidad no se evalúa adecuadamente sólo con una variable binaria del tipo "falló/no falló". Dos estaciones pueden haber fallado, pero una pudo hacerlo a los 15 días y otra a los 700 días. Esa diferencia temporal es clave para priorizar rediseños, mantenciones y decisiones de operación.
+
+## Por qué usar modelos Hazard
+
+Una regresión logística podría responder si una estación falló durante el período observado. Sin embargo, no incorpora directamente el tiempo hasta la falla ni aprovecha de manera natural las observaciones censuradas.
+
+Los modelos Hazard permiten trabajar con tres elementos simultáneamente:
+
+- el tiempo de seguimiento;
+- la ocurrencia o no ocurrencia del evento;
+- las covariables que modifican el riesgo instantáneo de falla.
+
+<div class="note">
+La censura es fundamental: una estación que no falla durante el período observado no se elimina del análisis, sino que aporta información porque se sabe que sobrevivió al menos hasta el último día registrado.
+</div>
+
+# Fundamentos de los modelos Hazard
+
+## Datos de supervivencia
+
+En análisis de supervivencia cada unidad de análisis se observa hasta que ocurre un evento o hasta que termina el período de seguimiento.
+
+En este ejercicio:
+
+- unidad de análisis: estación autónoma de monitoreo volcánico;
+- evento: falla operacional crítica;
+- tiempo: días hasta falla o censura;
+- censura: estación sin falla observada durante el horizonte de seguimiento.
+
+## Función de supervivencia
+
+La función de supervivencia representa la probabilidad de que el tiempo hasta el evento sea mayor que un valor específico \(t\):
+
+\[
+S(t)=P(T>t)
+\]
+
+donde \(T\) es el tiempo hasta falla y \(t\) es el tiempo de análisis.
+
+En términos operacionales, \(S(t)\) responde: **¿qué probabilidad tiene una estación de seguir operativa después de \(t\) días?**
+
+## Función Hazard
+
+La función Hazard representa el riesgo instantáneo de falla en el tiempo \(t\), condicionado a que la estación ha sobrevivido hasta ese momento:
+
+\[
+h(t)=\lim_{\Delta t \to 0}
+\frac{P(t \leq T < t+\Delta t \mid T \geq t)}{\Delta t}
+\]
+
+El Hazard no es una probabilidad directa. Es una tasa instantánea condicional de ocurrencia del evento.
+
+La supervivencia y el Hazard acumulado se relacionan mediante:
+
+\[
+H(t)=\int_0^t h(u)\,du
+\]
+
+\[
+S(t)=e^{-H(t)}
+\]
+
+## Estimador Kaplan-Meier
+
+Kaplan-Meier estima la supervivencia empírica considerando eventos y censura:
+
+\[
+\widehat{S}(t)=\prod_{t_i \leq t}
+\left(1-\frac{d_i}{n_i}\right)
+\]
+
+donde \(d_i\) es el número de eventos en el tiempo \(t_i\) y \(n_i\) es el número de unidades en riesgo justo antes de \(t_i\).
+
+Este estimador permite comparar curvas de supervivencia entre grupos, por ejemplo entre estaciones con sistema energético robusto, estándar o limitado.
+
+## Prueba Log-Rank
+
+La prueba Log-Rank compara curvas de supervivencia entre grupos. Su hipótesis nula es que no existen diferencias estadísticamente relevantes entre las curvas.
+
+En este trabajo se usa para comparar:
+
+- curvas por sistema energético;
+- curvas por exposición a nieve/hielo.
+
+## Modelo de Cox
+
+El modelo de Cox de riesgos proporcionales permite evaluar el efecto de varias covariables sobre el Hazard:
+
+\[
+h(t|X)=h_0(t)\exp(\beta_1X_1+\beta_2X_2+\cdots+\beta_pX_p)
+\]
+
+donde:
+
+- \(h(t|X)\) es el Hazard condicionado a covariables;
+- \(h_0(t)\) es el Hazard base;
+- \(X_1,\ldots,X_p\) son covariables;
+- \(\beta_1,\ldots,\beta_p\) son coeficientes estimados.
+
+## Hazard Ratio
+
+El resultado principal del modelo de Cox es el Hazard Ratio:
+
+\[
+HR=e^\beta
+\]
+
+Su interpretación es directa:
+
+- \(HR>1\): aumenta el Hazard relativo;
+- \(HR<1\): reduce el Hazard relativo;
+- \(HR=1\): no cambia el Hazard relativo.
+
+Por ejemplo, si una variable tiene \(HR=1.25\), se interpreta como un aumento aproximado del 25% en el Hazard, manteniendo constantes las demás variables del modelo.
+
+## Supuesto de riesgos proporcionales
+
+El modelo de Cox asume que los Hazard Ratios son aproximadamente constantes en el tiempo:
+
+\[
+\frac{h(t|X_a)}{h(t|X_b)}=\text{constante en el tiempo}
+\]
+
+Este supuesto se evalúa mediante residuos de Schoenfeld y una prueba global de riesgos proporcionales.
+
+# Ejemplo práctico
+
+## Base de datos utilizada
+
+Se utilizó una base de datos sintética y reproducible de estaciones autónomas asociadas a volcanes monitoreados en Chile. La base fue construida para demostrar el flujo metodológico y no corresponde a registros reales institucionales de operación, fallas o mantenimiento.
+
+```{r resumen-base}
+data_overview <- tibble(
+  Indicador = c(
+    "Estaciones sintéticas",
+    "Volcanes representados",
+    "Eventos/fallas observadas",
+    "Observaciones censuradas",
+    "Proporción de eventos",
+    "Tiempo mínimo observado",
+    "Tiempo mediano observado",
+    "Tiempo máximo observado"
+  ),
+  Valor = c(
+    nrow(hazard_data),
+    n_distinct(hazard_data$volcano_name),
+    sum(hazard_data$event == 1),
+    sum(hazard_data$event == 0),
+    round(mean(hazard_data$event == 1), 3),
+    min(hazard_data$time_days),
+    median(hazard_data$time_days),
+    max(hazard_data$time_days)
+  )
+)
+
+kable(data_overview, align = c("l", "c"))
+```
+
+<div class="warning">
+La base es sintética. Por lo tanto, los resultados no deben interpretarse como evidencia empírica real sobre estaciones de monitoreo, sino como una demostración técnica del método.
+</div>
+
+## Reproducibilidad y GitHub
+
+El entregable debe incluir la base de datos y el código R. Además, la base debe estar disponible en GitHub para poder cargarla desde un enlace RAW.
+
+```{r carga-github, eval=FALSE}
+library(readr)
+
+github_data_raw_url <- "PEGAR_AQUI_LINK_RAW_CSV"
+
+hazard_data <- read_csv(github_data_raw_url)
+```
+
+Repositorio del trabajo:
+
+```{r repositorio-github, results='asis', echo=FALSE}
+if (!grepl("^REEMPLAZAR", github_repo_url)) {
+  cat(paste0("<p><strong>Repositorio GitHub:</strong> <a href='", github_repo_url, "'>", github_repo_url, "</a></p>"))
+} else {
+  cat("<div class='warning'><strong>Repositorio GitHub pendiente:</strong> reemplazar la variable <code>github_repo_url</code> cuando el repositorio esté creado. En esta sección debe incorporarse también el código QR solicitado.</div>")
+}
+```
+
+## Variables principales
+
+```{r variables}
+variables_tbl <- tibble::tribble(
+  ~Variable, ~Descripción, ~Rol,
+  "station_id", "Identificador sintético de estación", "Identificación",
+  "volcano_name", "Volcán de referencia", "Contexto territorial",
+  "time_days", "Días observados hasta falla o censura", "Tiempo de supervivencia",
+  "event", "1 = falla; 0 = censura", "Evento",
+  "energy_system", "Robusto, estándar o limitado", "Covariable",
+  "snow_ice_exposure", "Baja, media, alta o muy alta", "Covariable",
+  "age_years", "Antigüedad simulada del sistema", "Covariable",
+  "battery_margin_days", "Margen energético simulado", "Covariable",
+  "winter_operation", "Operación durante invierno crítico", "Covariable"
+)
+
+kable(variables_tbl, align = c("l", "l", "l"))
+```
+
+## Carga y preparación en R
+
+```{r carga-preparacion, eval=FALSE}
+library(tidyverse)
+library(survival)
+library(survminer)
+library(broom)
+
+hazard_data <- read_csv("data/synthetic_hazard_stations_chile.csv") %>%
+  mutate(
+    event = as.integer(event),
+    time_days = as.numeric(time_days),
+    energy_system = factor(
+      energy_system,
+      levels = c("robust", "standard", "limited"),
+      labels = c("Robusto", "Estándar", "Limitado")
+    ),
+    snow_ice_exposure = factor(
+      snow_ice_exposure,
+      levels = c("low", "medium", "high", "very_high"),
+      labels = c("Baja", "Media", "Alta", "Muy alta")
+    )
+  )
+
+surv_obj <- Surv(time = hazard_data$time_days, event = hazard_data$event)
+```
+
+## Exploración inicial
+
+```{r exploracion-eventos}
+events_energy <- hazard_data %>%
+  count(energy_system, event) %>%
+  group_by(energy_system) %>%
+  mutate(Proporción = round(n / sum(n), 3)) %>%
+  ungroup() %>%
+  mutate(event = recode(as.character(event), "0" = "Censura", "1" = "Falla")) %>%
+  rename(`Sistema energético` = energy_system, Estado = event, n = n)
+
+kable(events_energy, align = c("l", "l", "c", "c"))
+```
+
+```{r exploracion-nieve}
+events_snow <- hazard_data %>%
+  count(snow_ice_exposure, event) %>%
+  group_by(snow_ice_exposure) %>%
+  mutate(Proporción = round(n / sum(n), 3)) %>%
+  ungroup() %>%
+  mutate(event = recode(as.character(event), "0" = "Censura", "1" = "Falla")) %>%
+  rename(`Exposición nieve/hielo` = snow_ice_exposure, Estado = event, n = n)
+
+kable(events_snow, align = c("l", "l", "c", "c"))
+```
+
+## Kaplan-Meier global
+
+```{r km-global}
+ggsurvplot(
+  km_global,
+  data = hazard_data,
+  conf.int = TRUE,
+  risk.table = FALSE,
+  xlab = "Tiempo de observación (días)",
+  ylab = "Probabilidad de supervivencia operacional",
+  title = "Curva Kaplan-Meier global",
+  subtitle = "Base sintética de estaciones autónomas de monitoreo volcánico",
+  ggtheme = theme_minimal(base_size = 12)
+)
+```
+
+La curva global muestra una disminución progresiva de la supervivencia operacional durante el horizonte de seguimiento. Esto permite estimar la probabilidad de que una estación siga operativa después de distintos tiempos de observación.
+
+## Kaplan-Meier por sistema energético
+
+```{r km-energia}
+ggsurvplot(
+  km_energy,
+  data = hazard_data,
+  conf.int = TRUE,
+  risk.table = FALSE,
+  pval = TRUE,
+  pval.coord = c(25, 0.18),
+  legend.title = "Sistema energético",
+  legend.labs = c("Robusto", "Estándar", "Limitado"),
+  xlab = "Tiempo de observación (días)",
+  ylab = "Probabilidad de supervivencia operacional",
+  title = "Supervivencia operacional según sistema energético",
+  subtitle = "Comparación Kaplan-Meier y prueba Log-Rank",
+  ggtheme = theme_minimal(base_size = 12)
+)
+```
+
+```{r logrank-energia}
+logrank_results %>%
+  filter(comparacion == "Sistema energético") %>%
+  mutate(
+    chisq = round(chisq, 3),
+    p_value = round(p_value, 4)
+  ) %>%
+  kable(align = c("l", "c", "c", "c", "l"))
+```
+
+<div class="key">
+El sistema energético muestra diferencias estadísticamente relevantes entre curvas de supervivencia. En la base sintética, las estaciones con sistema robusto mantienen mayor supervivencia operacional que las estaciones con configuración limitada.
+</div>
+
+## Kaplan-Meier por exposición a nieve/hielo
+
+```{r km-nieve}
+ggsurvplot(
+  km_snow,
+  data = hazard_data,
+  conf.int = FALSE,
+  risk.table = FALSE,
+  pval = TRUE,
+  pval.coord = c(25, 0.18),
+  legend.title = "Exposición nieve/hielo",
+  legend.labs = c("Baja", "Media", "Alta", "Muy alta"),
+  xlab = "Tiempo de observación (días)",
+  ylab = "Probabilidad de supervivencia operacional",
+  title = "Supervivencia operacional según exposición a nieve/hielo",
+  subtitle = "Mayor exposición representa condiciones ambientales más severas",
+  ggtheme = theme_minimal(base_size = 12)
+)
+```
+
+```{r logrank-nieve}
+logrank_results %>%
+  filter(comparacion == "Exposición nieve/hielo") %>%
+  mutate(
+    chisq = round(chisq, 3),
+    p_value = round(p_value, 4)
+  ) %>%
+  kable(align = c("l", "c", "c", "c", "l"))
+```
+
+<div class="warning">
+La exposición a nieve/hielo muestra una tendencia compatible con mayor severidad ambiental, pero no alcanza significancia estadística al 5%. Por lo tanto, debe interpretarse como evidencia sugerente y no como resultado concluyente.
+</div>
+
+## Ajuste del modelo Cox
+
+```{r modelo-cox, eval=FALSE}
+cox_model <- coxph(
+  Surv(time_days, event) ~
+    energy_system +
+    snow_ice_exposure +
+    age_years +
+    battery_margin_days +
+    winter_operation,
+  data = hazard_data
+)
+
+summary(cox_model)
+```
+
+El modelo Cox estima el efecto ajustado de cada variable sobre el Hazard de falla, manteniendo constantes las demás covariables incluidas en el modelo.
+
+## Hazard Ratios estimados
+
+```{r tabla-cox}
+kable(cox_table, align = c("l", "c", "c", "c"))
+```
+
+La antigüedad del sistema es el predictor ajustado más robusto. En esta base sintética, cada año adicional de antigüedad incrementa el Hazard de falla en aproximadamente 24,5%, manteniendo constantes las demás variables del modelo.
+
+## Visualización de Hazard Ratios
+
+```{r forest-cox}
+forest_data <- cox_hr %>%
+  mutate(
+    Variable = fct_reorder(variable, HR)
+  )
+
+ggplot(forest_data, aes(x = HR, y = Variable)) +
+  geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.7) +
+  geom_point(size = 3) +
+  geom_errorbarh(
+    aes(xmin = conf.low, xmax = conf.high),
+    height = 0.18,
+    linewidth = 0.7
+  ) +
+  scale_x_log10(
+    breaks = c(0.3, 0.5, 1, 2, 3, 5, 10, 30),
+    labels = c("0.3", "0.5", "1", "2", "3", "5", "10", "30")
+  ) +
+  coord_cartesian(xlim = c(0.25, 30)) +
+  labs(
+    title = "Modelo Cox: Hazard Ratios estimados",
+    subtitle = "HR > 1 indica mayor riesgo instantáneo de falla; HR < 1 indica menor riesgo relativo",
+    x = "Hazard Ratio, escala logarítmica",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+## Métricas del modelo
+
+```{r metricas}
+kable(model_metrics, align = c("l", "c"))
+```
+
+El modelo completo es estadísticamente relevante según el Likelihood Ratio Test. El C-index cercano a 0,71 indica capacidad discriminativa moderada-alta para distinguir estaciones con mayor y menor riesgo relativo de falla.
+
+## Validación del supuesto de riesgos proporcionales
+
+```{r ph-test}
+kable(ph_table, align = c("l", "c", "c", "c", "l"))
+```
+
+<div class="key">
+El test global no entrega evidencia de violación del supuesto de riesgos proporcionales. Por lo tanto, el modelo Cox es aceptable para este ejercicio sintético.
+</div>
+
+```{r schoenfeld, fig.width=9, fig.height=6}
+par(mfrow = c(2, 3))
+plot(ph_test)
+```
+
+# Discusión crítica
+
+## Hallazgos principales
+
+Los resultados muestran tres elementos relevantes para la interpretación:
+
+1. Las curvas Kaplan-Meier por sistema energético presentan diferencias significativas.
+2. La exposición a nieve/hielo muestra una tendencia plausible, aunque no concluyente al 5%.
+3. En el modelo Cox ajustado, la antigüedad del sistema aparece como el predictor más robusto del Hazard de falla.
+
+Esta diferencia entre Kaplan-Meier y Cox es importante: una variable puede separar curvas en un análisis no ajustado, pero perder significancia al controlar por otras covariables.
+
+## Ventajas del enfoque
+
+Los modelos Hazard tienen varias ventajas para problemas de ingeniería:
+
+- incorporan explícitamente el tiempo hasta la falla;
+- permiten utilizar observaciones censuradas;
+- entregan indicadores interpretables mediante Hazard Ratios;
+- ayudan a priorizar mantenimiento, rediseño y monitoreo preventivo;
+- permiten evaluar el efecto conjunto de múltiples covariables.
+
+## Limitaciones
+
+Las principales limitaciones son:
+
+- requieren una definición clara del evento;
+- dependen de la calidad y trazabilidad de los registros;
+- el modelo Cox exige revisar el supuesto de riesgos proporcionales;
+- pocos eventos generan intervalos de confianza amplios;
+- los resultados sintéticos no deben extrapolarse directamente a sistemas reales.
+
+<div class="warning">
+Para una aplicación institucional real sería necesario consolidar una base con fechas de instalación, fallas, censuras, tipos de intervención, antigüedad, reposición de componentes, mantenciones y condiciones ambientales.
+</div>
+
+# Conclusiones
+
+Los modelos Hazard son adecuados cuando interesa analizar el **tiempo hasta falla** y no sólo la ocurrencia del evento.
+
+Kaplan-Meier permite visualizar la supervivencia operacional y comparar grupos de manera exploratoria.
+
+El modelo Cox permite estimar efectos ajustados mediante Hazard Ratios, entregando una lectura más completa del riesgo relativo asociado a cada covariable.
+
+En el caso sintético, la antigüedad del sistema fue el predictor ajustado más consistente del Hazard de falla.
+
+Para una aplicación real, el principal desafío no es estadístico sino operacional: construir una base de datos confiable, trazable y mantenida en el tiempo.
+
+# Referencias
+
+- Cox, D. R. (1972). Regression Models and Life-Tables. *Journal of the Royal Statistical Society: Series B*.
+- Kaplan, E. L., & Meier, P. (1958). Nonparametric Estimation from Incomplete Observations. *Journal of the American Statistical Association*.
+- Therneau, T. M. (2024). *A Package for Survival Analysis in R*. Paquete `survival`.
+- Kassambara, A., Kosinski, M., & Biecek, P. (2024). *survminer: Drawing Survival Curves using ggplot2*.
+- Servicio Nacional de Geología y Minería / Plataforma de Datos Itrend. Dataset de referencia: volcanes activos y monitoreados en Chile.
+- Base utilizada: datos sintéticos reproducibles generados para fines docentes.
+
+# Anexo: estructura de archivos esperada
+
+```text
+Workshop 4/
+├── data/
+│   └── synthetic_hazard_stations_chile.csv
+├── scripts/
+│   └── 02_analisis_hazard.R
+├── presentacion/
+│   └── Workshop4_modelos_hazard_FORMATO_CURSO.Rmd
+├── outputs/
+│   ├── figures/
+│   └── tables/
+└── README.md
+```

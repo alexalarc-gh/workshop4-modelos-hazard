@@ -1,0 +1,14 @@
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+*.log
+*.tmp
+*.bak
+
+.DS_Store
+Thumbs.db
+
+*.rar
+*.zip
