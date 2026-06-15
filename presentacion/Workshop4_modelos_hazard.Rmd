@@ -251,6 +251,37 @@ pre {
 }
 </style>
 
+# Acceso a presentación y repositorio
+
+La presentación HTML está publicada en GitHub Pages. El repositorio contiene la presentación en R Markdown, el HTML renderizado, la base de datos sintética, el código R, las tablas y las figuras reproducibles del ejercicio práctico.
+
+- **Presentación publicada:** <https://alexalarc-gh.github.io/workshop4-modelos-hazard/>
+- **Repositorio GitHub:** <https://github.com/alexalarc-gh/workshop4-modelos-hazard>
+- **Base RAW CSV:** <https://raw.githubusercontent.com/alexalarc-gh/workshop4-modelos-hazard/main/data/synthetic_hazard_stations_chile.csv>
+
+```{r qr-github, echo=FALSE, results='asis'}
+qr_candidates <- c(
+  "qr_github.png",
+  "presentacion/qr_github.png",
+  "../presentacion/qr_github.png"
+)
+
+qr_file <- qr_candidates[file.exists(qr_candidates)][1]
+
+if (!is.na(qr_file)) {
+  cat(
+    paste0(
+      '<div style="text-align:center; margin: 25px 0;">',
+      '<img src="', knitr::image_uri(normalizePath(qr_file)), '" width="240">',
+      '<p><strong>QR de acceso a la presentación publicada</strong></p>',
+      '</div>'
+    )
+  )
+} else {
+  cat("QR pendiente de generación.")
+}
+```
+
 # Introducción / Motivación
 
 Los modelos Hazard, también conocidos como modelos de supervivencia o análisis de tiempo hasta evento, permiten estudiar **cuánto tiempo transcurre hasta que ocurre un evento relevante**. En ingeniería, estos modelos son especialmente útiles cuando el evento corresponde a una falla, una detención operacional, una pérdida de comunicación, una indisponibilidad prolongada o una intervención correctiva.
