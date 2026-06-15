@@ -460,25 +460,27 @@ La base es sintética. Por lo tanto, los resultados no deben interpretarse como 
 
 ## Reproducibilidad y GitHub
 
-El entregable debe incluir la base de datos y el código R. Además, la base debe estar disponible en GitHub para poder cargarla desde un enlace RAW.
+El entregable incluye la base de datos, el código R y la presentación en formato reproducible. Además, la base se encuentra disponible mediante enlace RAW de GitHub, lo que permite cargarla directamente desde R sin depender de rutas locales.
 
-```{r carga-github, eval=FALSE}
+```{r carga-raw-github, echo=TRUE, eval=FALSE}
 library(readr)
 
-github_data_raw_url <- "PEGAR_AQUI_LINK_RAW_CSV"
+github_data_raw_url <- "https://raw.githubusercontent.com/alexalarc-gh/workshop4-modelos-hazard/main/data/synthetic_hazard_stations_chile.csv"
 
 hazard_data <- read_csv(github_data_raw_url)
 ```
 
 Repositorio del trabajo:
 
-```{r repositorio-github, results='asis', echo=FALSE}
-if (!grepl("^REEMPLAZAR", github_repo_url)) {
-  cat(paste0("<p><strong>Repositorio GitHub:</strong> <a href='", github_repo_url, "'>", github_repo_url, "</a></p>"))
-} else {
-  cat("<div class='warning'><strong>Repositorio GitHub pendiente:</strong> reemplazar la variable <code>github_repo_url</code> cuando el repositorio esté creado. En esta sección debe incorporarse también el código QR solicitado.</div>")
-}
-```
+<https://github.com/alexalarc-gh/workshop4-modelos-hazard>
+
+Presentación publicada:
+
+<https://alexalarc-gh.github.io/workshop4-modelos-hazard/>
+
+Base de datos RAW:
+
+<https://raw.githubusercontent.com/alexalarc-gh/workshop4-modelos-hazard/main/data/synthetic_hazard_stations_chile.csv>
 
 ## Variables principales
 
@@ -783,7 +785,7 @@ Workshop 4/
 ├── scripts/
 │   └── 02_analisis_hazard.R
 ├── presentacion/
-│   └── Workshop4_modelos_hazard_FORMATO_CURSO.Rmd
+│   └── Workshop4_modelos_hazard.Rmd
 ├── outputs/
 │   ├── figures/
 │   └── tables/
