@@ -3275,20 +3275,21 @@ monitoreo, sino como una demostración técnica del método.</p>
 <div id="reproducibilidad-y-github" class="section level2" number="4.2">
 <h2><span class="header-section-number">4.2</span> Reproducibilidad y
 GitHub</h2>
-<p>El entregable debe incluir la base de datos y el código R. Además, la
-base debe estar disponible en GitHub para poder cargarla desde un enlace
-RAW.</p>
+<p>El entregable incluye la base de datos, el código R y la presentación
+en formato reproducible. Además, la base se encuentra disponible
+mediante enlace RAW de GitHub, lo que permite cargarla directamente
+desde R sin depender de rutas locales.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(readr)</span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>github_data_raw_url <span class="ot">&lt;-</span> <span class="st">&quot;PEGAR_AQUI_LINK_RAW_CSV&quot;</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>github_data_raw_url <span class="ot">&lt;-</span> <span class="st">&quot;https://raw.githubusercontent.com/alexalarc-gh/workshop4-modelos-hazard/main/data/synthetic_hazard_stations_chile.csv&quot;</span></span>
 <span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a></span>
 <span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>hazard_data <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(github_data_raw_url)</span></code></pre></div>
 <p>Repositorio del trabajo:</p>
-<div class="warning">
-<strong>Repositorio GitHub pendiente:</strong> reemplazar la variable
-<code>github_repo_url</code> cuando el repositorio esté creado. En esta
-sección debe incorporarse también el código QR solicitado.
-</div>
+<p><a href="https://github.com/alexalarc-gh/workshop4-modelos-hazard" class="uri">https://github.com/alexalarc-gh/workshop4-modelos-hazard</a></p>
+<p>Presentación publicada:</p>
+<p><a href="https://alexalarc-gh.github.io/workshop4-modelos-hazard/" class="uri">https://alexalarc-gh.github.io/workshop4-modelos-hazard/</a></p>
+<p>Base de datos RAW:</p>
+<p><a href="https://raw.githubusercontent.com/alexalarc-gh/workshop4-modelos-hazard/main/data/synthetic_hazard_stations_chile.csv" class="uri">https://raw.githubusercontent.com/alexalarc-gh/workshop4-modelos-hazard/main/data/synthetic_hazard_stations_chile.csv</a></p>
 </div>
 <div id="variables-principales" class="section level2" number="4.3">
 <h2><span class="header-section-number">4.3</span> Variables
@@ -3998,7 +3999,7 @@ archivos esperada</h1>
 ├── scripts/
 │   └── 02_analisis_hazard.R
 ├── presentacion/
-│   └── Workshop4_modelos_hazard_FORMATO_CURSO.Rmd
+│   └── Workshop4_modelos_hazard.Rmd
 ├── outputs/
 │   ├── figures/
 │   └── tables/
